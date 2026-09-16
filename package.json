@@ -1,7 +1,7 @@
 {
   "name": "mwg-accounting",
   "productName": "mwg记账",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "mwg记账 —— 个人记账桌面应用（Windows / macOS）",
   "main": ".vite/build/main.js",
   "private": true,
