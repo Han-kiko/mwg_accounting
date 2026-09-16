@@ -32,7 +32,8 @@ export function initDatabase(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       parent_id INTEGER REFERENCES categories(id),
-      sort_order INTEGER NOT NULL DEFAULT 0
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_preset INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS expenses (
@@ -45,6 +46,15 @@ export function initDatabase(): void {
     );
   `);
 
+  // 老数据库升级：补上 is_preset 列（老库里只有预置分类，全部标记为预置）
+  const cols = db.pragma('table_info(categories)') as Array<{ name: string }>;
+  if (!cols.some((col) => col.name === 'is_preset')) {
+    db.exec(`
+      ALTER TABLE categories ADD COLUMN is_preset INTEGER NOT NULL DEFAULT 0;
+      UPDATE categories SET is_preset = 1;
+    `);
+  }
+
   seedCategories();
 }
 
@@ -54,10 +64,10 @@ function seedCategories(): void {
   if (c > 0) return;
 
   const insertTop = db.prepare(
-    'INSERT INTO categories (name, parent_id, sort_order) VALUES (?, NULL, ?)',
+    'INSERT INTO categories (name, parent_id, sort_order, is_preset) VALUES (?, NULL, ?, 1)',
   );
   const insertSub = db.prepare(
-    'INSERT INTO categories (name, parent_id, sort_order) VALUES (?, ?, ?)',
+    'INSERT INTO categories (name, parent_id, sort_order, is_preset) VALUES (?, ?, ?, 1)',
   );
 
   const seed = db.transaction(() => {
@@ -81,23 +91,31 @@ export function countCategories(): number {
 export function getCategoryTree(): Array<{
   id: number;
   name: string;
-  children: Array<{ id: number; name: string }>;
+  isPreset: boolean;
+  children: Array<{ id: number; name: string; isPreset: boolean }>;
 }> {
   const rows = db
     .prepare(
-      `SELECT id, name, parent_id AS parentId, sort_order AS sortOrder
+      `SELECT id, name, parent_id AS parentId, sort_order AS sortOrder, is_preset AS isPreset
        FROM categories ORDER BY sort_order`,
     )
-    .all() as Array<{ id: number; name: string; parentId: number | null; sortOrder: number }>;
+    .all() as Array<{
+    id: number;
+    name: string;
+    parentId: number | null;
+    sortOrder: number;
+    isPreset: number;
+  }>;
 
   return rows
     .filter((r) => r.parentId === null)
     .map((top) => ({
       id: top.id,
       name: top.name,
+      isPreset: top.isPreset === 1,
       children: rows
         .filter((r) => r.parentId === top.id)
-        .map((r) => ({ id: r.id, name: r.name })),
+        .map((r) => ({ id: r.id, name: r.name, isPreset: r.isPreset === 1 })),
     }));
 }
 
@@ -107,6 +125,148 @@ export function isSubCategory(id: number): boolean {
     | { parentId: number | null }
     | undefined;
   return !!row && row.parentId !== null;
+}
+
+/** 规范化分类名（去首尾空格、限 1~10 字） */
+function normalizeCategoryName(rawName: unknown): string {
+  if (typeof rawName !== 'string') {
+    throw new Error('分类名无效');
+  }
+  const name = rawName.trim();
+  if (name.length < 1 || name.length > 10) {
+    throw new Error('分类名无效：请输入 1~10 个字符');
+  }
+  return name;
+}
+
+/** 同一层级下是否已有同名分类（parentId 为 null 表示一级大类层） */
+function findSameName(parentId: number | null, name: string, excludeId?: number): boolean {
+  const cond = parentId === null ? 'parent_id IS NULL' : 'parent_id = ?';
+  const params: Array<string | number> = parentId === null ? [name] : [parentId, name];
+  const sql = `SELECT 1 AS f FROM categories WHERE ${cond} AND name = ?${
+    excludeId !== undefined ? ' AND id != ?' : ''
+  }`;
+  if (excludeId !== undefined) params.push(excludeId);
+  return !!db.prepare(sql).get(...params);
+}
+
+/** 新增一级大类（用户自建，显示在最后）。返回新分类 id。 */
+export function addTopCategory(rawName: string): number {
+  const name = normalizeCategoryName(rawName);
+  if (findSameName(null, name)) {
+    throw new Error(`已存在同名分类「${name}」，请换一个名字`);
+  }
+  const { max } = db
+    .prepare('SELECT MAX(sort_order) AS max FROM categories WHERE parent_id IS NULL')
+    .get() as { max: number | null };
+  const r = db
+    .prepare(
+      'INSERT INTO categories (name, parent_id, sort_order, is_preset) VALUES (?, NULL, ?, 0)',
+    )
+    .run(name, (max ?? -1) + 1);
+  return r.lastInsertRowid as number;
+}
+
+/** 新增二级小类（可挂在预置或自建的一级大类下）。返回新分类 id。 */
+export function addSubCategory(parentId: number, rawName: string): number {
+  const parent = db
+    .prepare('SELECT parent_id AS parentId FROM categories WHERE id = ?')
+    .get(parentId) as { parentId: number | null } | undefined;
+  if (!parent || parent.parentId !== null) {
+    throw new Error('只能在一级大类下新增二级小类');
+  }
+  const name = normalizeCategoryName(rawName);
+  if (findSameName(parentId, name)) {
+    throw new Error(`已存在同名分类「${name}」，请换一个名字`);
+  }
+  const { max } = db
+    .prepare('SELECT MAX(sort_order) AS max FROM categories WHERE parent_id = ?')
+    .get(parentId) as { max: number | null };
+  const r = db
+    .prepare(
+      'INSERT INTO categories (name, parent_id, sort_order, is_preset) VALUES (?, ?, ?, 0)',
+    )
+    .run(name, parentId, (max ?? -1) + 1);
+  return r.lastInsertRowid as number;
+}
+
+/** 修改分类名称。预置分类禁止修改。返回受影响行数（0 表示分类不存在）。 */
+export function renameCategory(id: number, rawName: string): number {
+  const row = db
+    .prepare('SELECT parent_id AS parentId, is_preset AS isPreset FROM categories WHERE id = ?')
+    .get(id) as { parentId: number | null; isPreset: number } | undefined;
+  if (!row) return 0;
+  if (row.isPreset) {
+    throw new Error('预置分类不能修改');
+  }
+  const name = normalizeCategoryName(rawName);
+  if (findSameName(row.parentId, name, id)) {
+    throw new Error(`已存在同名分类「${name}」，请换一个名字`);
+  }
+  return db.prepare('UPDATE categories SET name = ? WHERE id = ?').run(name, id).changes;
+}
+
+/** 某分类下关联的账单数（一级大类会连同其下小类一起统计） */
+export function countCategoryExpenses(id: number): number {
+  const row = db.prepare('SELECT parent_id AS parentId FROM categories WHERE id = ?').get(id) as
+    | { parentId: number | null }
+    | undefined;
+  if (!row) return 0;
+  const { c } =
+    row.parentId === null
+      ? (db
+          .prepare(
+            `SELECT COUNT(*) AS c FROM expenses e
+             JOIN categories sub ON sub.id = e.category_id
+             WHERE sub.parent_id = ?`,
+          )
+          .get(id) as { c: number })
+      : (db.prepare('SELECT COUNT(*) AS c FROM expenses WHERE category_id = ?').get(id) as {
+          c: number;
+        });
+  return c;
+}
+
+/**
+ * 删除分类。预置分类禁止删除。
+ * 若该分类下还有账单，必须提供 targetCategoryId，账单会先全部搬到目标二级小类再删除；
+ * 删除一级大类时，其下的小类一并删除（小类的账单同样先搬走）。
+ * 返回受影响行数（0 表示分类不存在）。
+ */
+export function deleteCategory(id: number, targetCategoryId?: number): number {
+  const row = db
+    .prepare('SELECT parent_id AS parentId, is_preset AS isPreset FROM categories WHERE id = ?')
+    .get(id) as { parentId: number | null; isPreset: number } | undefined;
+  if (!row) return 0;
+  if (row.isPreset) {
+    throw new Error('预置分类不能删除');
+  }
+
+  const del = db.transaction(() => {
+    // 要删的分类集合：一级大类带上其下所有小类
+    const ids: number[] = [id];
+    if (row.parentId === null) {
+      const subs = db
+        .prepare('SELECT id FROM categories WHERE parent_id = ?')
+        .all(id) as Array<{ id: number }>;
+      ids.push(...subs.map((s) => s.id));
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    const { c } = db
+      .prepare(`SELECT COUNT(*) AS c FROM expenses WHERE category_id IN (${placeholders})`)
+      .get(...ids) as { c: number };
+    if (c > 0) {
+      if (!targetCategoryId || !isSubCategory(targetCategoryId) || ids.includes(targetCategoryId)) {
+        throw new Error('该分类下还有账单：请先选择要归入的二级小类');
+      }
+      db.prepare(`UPDATE expenses SET category_id = ? WHERE category_id IN (${placeholders})`).run(
+        targetCategoryId,
+        ...ids,
+      );
+    }
+    return db.prepare(`DELETE FROM categories WHERE id IN (${placeholders})`).run(...ids).changes;
+  });
+  return del();
 }
 
 /**

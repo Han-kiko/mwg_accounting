@@ -3,8 +3,12 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import {
   addExpense,
+  addSubCategory,
+  addTopCategory,
   countCategories,
+  countCategoryExpenses,
   countExpensesInMonth,
+  deleteCategory,
   deleteExpense,
   getCategoryTree,
   getDbPath,
@@ -12,6 +16,7 @@ import {
   initDatabase,
   isSubCategory,
   listExpenses,
+  renameCategory,
   updateExpense,
 } from './db';
 import type { AppInfo, ExpenseFilter, ExpenseInput } from './shared/api';
@@ -32,6 +37,49 @@ ipcMain.handle('app:info', (): AppInfo => {
 
 // 分类树（记一笔、筛选共用）
 ipcMain.handle('categories:getTree', () => getCategoryTree());
+
+// ---- 分类管理（预置分类受保护；自建分类可新增、改名、删除） ----
+
+// 新增一级大类
+ipcMain.handle('categories:addTop', (_event, name: string) => addTopCategory(name));
+
+// 新增二级小类
+ipcMain.handle('categories:addSub', (_event, parentId: number, name: string) => {
+  if (!Number.isInteger(parentId) || parentId <= 0) {
+    throw new Error('一级分类无效');
+  }
+  return addSubCategory(parentId, name);
+});
+
+// 修改分类名称
+ipcMain.handle('categories:rename', (_event, id: number, name: string) => {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('分类编号无效');
+  }
+  if (renameCategory(id, name) === 0) {
+    throw new Error('分类不存在或已被删除');
+  }
+  return true;
+});
+
+// 删除分类（若下面有账单，需带 targetCategoryId 把账单先搬走）
+ipcMain.handle('categories:delete', (_event, id: number, targetCategoryId?: number) => {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('分类编号无效');
+  }
+  if (deleteCategory(id, targetCategoryId) === 0) {
+    throw new Error('分类不存在或已被删除');
+  }
+  return true;
+});
+
+// 某分类下的账单数（删除前判断是否需要搬移账单）
+ipcMain.handle('categories:expenseCount', (_event, id: number) => {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('分类编号无效');
+  }
+  return countCategoryExpenses(id);
+});
 
 /** 校验一笔账单的输入，不合法时抛出带中文提示的错误 */
 function validateExpenseInput(input: ExpenseInput): void {

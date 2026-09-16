@@ -12,6 +12,15 @@ import type {
 const api = {
   getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
   getCategoryTree: (): Promise<CategoryNode[]> => ipcRenderer.invoke('categories:getTree'),
+  addTopCategory: (name: string): Promise<number> => ipcRenderer.invoke('categories:addTop', name),
+  addSubCategory: (parentId: number, name: string): Promise<number> =>
+    ipcRenderer.invoke('categories:addSub', parentId, name),
+  renameCategory: (id: number, name: string): Promise<boolean> =>
+    ipcRenderer.invoke('categories:rename', id, name),
+  deleteCategory: (id: number, targetCategoryId?: number): Promise<boolean> =>
+    ipcRenderer.invoke('categories:delete', id, targetCategoryId),
+  countCategoryExpenses: (id: number): Promise<number> =>
+    ipcRenderer.invoke('categories:expenseCount', id),
   addExpense: (input: ExpenseInput): Promise<number> => ipcRenderer.invoke('expense:add', input),
   updateExpense: (id: number, input: ExpenseInput): Promise<boolean> =>
     ipcRenderer.invoke('expense:update', id, input),

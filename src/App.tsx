@@ -4,24 +4,27 @@ import {
   BarChartOutlined,
   EditOutlined,
   SettingOutlined,
+  TagsOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
 import { Card, Descriptions, Layout, Menu, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import type { AppInfo } from './shared/api';
 import AddExpensePage from './pages/AddExpensePage';
+import CategoryManagePage from './pages/CategoryManagePage';
 import ExpenseListPage from './pages/ExpenseListPage';
 import StatsPage from './pages/StatsPage';
 
 const { Header, Sider, Content } = Layout;
 
-type PageKey = 'home' | 'add' | 'list' | 'stats' | 'settings';
+type PageKey = 'home' | 'add' | 'list' | 'stats' | 'categories' | 'settings';
 
 const MENU_ITEMS: MenuProps['items'] = [
   { key: 'home', icon: <AppstoreOutlined />, label: '首页' },
   { key: 'add', icon: <EditOutlined />, label: '记一笔' },
   { key: 'list', icon: <UnorderedListOutlined />, label: '账单' },
   { key: 'stats', icon: <BarChartOutlined />, label: '月度汇总' },
+  { key: 'categories', icon: <TagsOutlined />, label: '分类管理' },
   { key: 'settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
@@ -103,6 +106,8 @@ export default function App() {
             <ExpenseListPage />
           ) : page === 'stats' ? (
             <StatsPage />
+          ) : page === 'categories' ? (
+            <CategoryManagePage />
           ) : (
             <Card>
               <Typography.Title level={5} style={{ marginTop: 0 }}>

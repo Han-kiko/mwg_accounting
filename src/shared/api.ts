@@ -13,7 +13,9 @@ export interface AppInfo {
 export interface CategoryNode {
   id: number;
   name: string;
-  children: Array<{ id: number; name: string }>;
+  /** 是否预置分类（预置的不能改名、不能删除） */
+  isPreset: boolean;
+  children: Array<{ id: number; name: string; isPreset: boolean }>;
 }
 
 /** 一笔账单的完整信息（已关联分类名称） */
