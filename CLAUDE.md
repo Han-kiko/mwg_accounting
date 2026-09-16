@@ -51,6 +51,8 @@
 | 2026-09-14 | Windows 安装包格式：**安装版 Setup.exe + 绿色版 ZIP 两个都出** | 用户选定：安装版像正规软件、双击即装；绿色版解压即用、可放 U 盘随身带；打包时顺手一起出，不额外费事 |
 | 2026-09-14 | Mac 版（.dmg）：**暂不打包**，本阶段只出 Windows 版 | 苹果限制 .dmg 只能在 Mac 电脑上制作；用户选定以后有 Mac 电脑时再打（项目配置已就绪，一条命令即可） |
 | 2026-09-14 | 软件签名：**不购买证书**，接受安装时的「未知发布者」警告 | 用户选定：个人自用无需每年花数百元；安装时点「仍要运行」即可正常使用，不影响任何功能 |
+| 2026-09-16 | 版本管理云端备份：**GitHub**（仓库 `Han-kiko/mwg_accounting`，公开） | 用户选定 GitHub 并同意仓库公开；代码不含账单数据与任何敏感信息 |
+| 2026-09-16 | GitHub 连接方式：**走本机代理**（git 配置 `http://127.0.0.1:7897`，仅本项目、仅 github.com） | 实测本机直连 GitHub 超时，代理可达；用户选定继续用 GitHub 而非换平台。注意：以后推送时代理软件需保持开启 |
 
 > 后续新增技术细节（如导出备份格式等）按第 2 章协作规则另行征询用户后决定，决策后补录到本表。
 
@@ -70,6 +72,7 @@
   cd F:/mwg-accounting && PATH="/c/Windows/System32:/c/Windows/System32/WindowsPowerShell/v1.0:$PATH" NODE_OPTIONS="--require=F:/mwg-accounting/scripts/keepalive.js" env -u ELECTRON_RUN_AS_NODE node F:/mwg-accounting/node_modules/@electron-forge/cli/dist/electron-forge.js make > "F:/mwg-accounting/make.log" 2>&1
   ```
   产物在 `out\make\`：`mwg记账-1.0.0 Setup.exe`（安装版）+ `mwg记账-win32-x64-1.0.0.zip`（绿色版）。
+- **版本管理（git）**：项目已纳入 git 管理，云端备份在 GitHub（`Han-kiko/mwg_accounting`，公开）。每次完成一个功能后由 Claude 负责存档并推送云端，用户无需操作 git。推送需代理软件开启（见上表 2026-09-16 决策）；若推送失败提示网络错误，先检查代理软件是否在运行。
 
 ## 4. 产品功能设计
 
@@ -113,3 +116,4 @@
 - [x] 2026-09-13 搭建应用基础框架：Electron Forge + Vite + React + TypeScript + Ant Design 5 骨架跑通，SQLite 数据库建表并写入两级分类（9 大类 + 41 小类），应用可启动显示主界面
 - [x] 2026-09-13 开发第一版核心功能：记一笔（联动分类下拉）、账单列表（筛选/分页/合计）、修改（弹窗编辑）、删除（确认弹窗）、月度汇总（总额/笔数/日均 + 分类占比进度条）
 - [x] 2026-09-16 打包 Windows 安装包完成：Setup.exe 安装版 + ZIP 绿色版（`out\make\`），均已实测——安装流程、开始菜单快捷方式启动、数据库读写全部正常（Mac 版按 2026-09-14 决策暂缓）
+- [x] 2026-09-16 纳入 git 版本管理并完成 GitHub 云端备份：本地存档点建立、代码推送云端成功（走本机代理）
