@@ -166,6 +166,15 @@ const createWindow = () => {
     },
   });
 
+  // 诊断日志：排查窗口/进程意外退出的原因
+  mainWindow.on('closed', () => console.log('[main] 窗口已关闭'));
+  mainWindow.webContents.on('render-process-gone', (_e, details) =>
+    console.log('[main] 渲染进程消失：', JSON.stringify(details)),
+  );
+  app.on('child-process-gone', (_e, details) =>
+    console.log('[main] 子进程消失：', details.type, details.reason, details.exitCode),
+  );
+
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -195,6 +204,7 @@ app.on('ready', () => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  console.log('[main] 所有窗口已关闭，准备退出');
   if (process.platform !== 'darwin') {
     app.quit();
   }
