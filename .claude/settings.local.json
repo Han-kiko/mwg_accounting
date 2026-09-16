@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm start *)",
+      "Bash(node scripts/make-icon.js)",
+      "Bash(node -e *)",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command \"Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(env -u ELECTRON_RUN_AS_NODE ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm run make)",
+      "Bash(env -u ELECTRON_RUN_AS_NODE ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ DEBUG=electron-forge:make,electron-forge:require,electron-forge:plugin npx electron-forge make)",
+      "Bash(env -u ELECTRON_RUN_AS_NODE ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron-packager . --platform=win32 --arch=x64 --icon=./images/icon --out=out-test --overwrite)",
+      "Bash(echo \"PACKAGER EXIT: $?\")"
+    ]
+  }
+}

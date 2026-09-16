@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"console.log\\('react:', require\\('react/package.json'\\).version, '| antd:', require\\('antd/package.json'\\).version\\)\")",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command 'Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Output \\('\\\\''killed pid '\\\\'' + $_\\) }')",
+      "Bash(tasklist)",
+      "Bash(echo \"---exit $?\")",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command \"Get-Process electron -ErrorAction SilentlyContinue | Select-Object Id,StartTime | Format-Table\")",
+      "Read(//c/Users/mwg08/AppData/Roaming/mwg记账//**)",
+      "Read(//c/Users/mwg08/AppData/Roaming//**)",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command 'Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force; Get-NetTCPConnection -LocalPort 5173,5174,5175 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Output '\\\\''cleaned'\\\\''')",
+      "Bash(node -e \"const D=require\\('better-sqlite3'\\);const db=new D\\(':memory:'\\);db.exec\\('CREATE TABLE t\\(x INTEGER\\)'\\);db.prepare\\('INSERT INTO t VALUES \\(42\\)'\\).run\\(\\);console.log\\('better-sqlite3 works under Node, value:', db.prepare\\('SELECT x FROM t'\\).get\\(\\).x\\)\")",
+      "Bash(timeout 25 ./node_modules/electron/dist/electron.exe .vite/build/main.js)",
+      "Bash(timeout 20 ./node_modules/electron/dist/electron.exe test-e.cjs)",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command 'Get-Volume | Where-Object {$_.DriveLetter} | Select-Object DriveLetter,FileSystemType,DriveType,SizeRemaining | Format-Table; Get-WinEvent -LogName '\\\\''Microsoft-Windows-Windows Defender/Operational'\\\\'' -MaxEvents 8 -ErrorAction SilentlyContinue | Where-Object {$_.Id -in 1116,1117,1119,1120} | Select-Object TimeCreated,Id,Message | Format-List')",
+      "Bash(node -e \" *)",
+      "Read(//c/Users/mwg08/AppData/Local/Temp/ziptest5/**)",
+      "Bash(timeout 60 node scripts/extract-trace.js)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
