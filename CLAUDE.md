@@ -158,3 +158,29 @@
 - [x] 2026-09-21 发布 1.2.0：贪吃蛇 + 单元测试与质量工具链合并进 main，打包出 `mwg记账-1.2.0 Setup.exe` 与绿色版 ZIP，并推送 GitHub（提交 `44bebc6`）
 - [x] 2026-09-21 单元测试与质量工具链：Vitest 3 接入（`npm test`，13 项核心数据逻辑测试全部通过）；新增 5 个 skill（`open` / `test` / `comments-check` / `security-audit` / `git-save`）与 2 个 subagent（`tester` / `quality-engineer`）
 - [x] 2026-09-21 安全与注释加固：`.gitignore` 补数据库文件防泄露规则；`main.ts` 遗留的英文样板注释全部改为中文
+
+## 8. 接续说明（新的 Claude 对话请先读这一节）
+
+> 写于 2026-09-21。上一轮对话的工作区被误设在旧备份目录里，因此留下这一节做交接。
+
+**项目唯一正主：`F:\mwg-accounting`**（英文路径，打包工具要求）。
+
+旧备份 `F:\vibecoding_记账app`（中文路径，打包工具 rcedit 无法处理）**内容已清空、只剩空壳待删**，**不要再往里写入任何东西**。
+
+### 当前状态（2026-09-21）
+
+- 版本 **1.2.0**；main 分支与云端一致（`d65df46`），工作区干净
+- 单元测试已接入：`npm test` → 13 项核心数据逻辑测试全部通过
+- 已装 5 个 skill（`open` / `test` / `comments-check` / `security-audit` / `git-save`）与 2 个 subagent（`tester` / `quality-engineer`）
+- 安装包产物：`out\make\mwg记账-1.2.0 Setup.exe` + `out\make\zip\win32\x64\mwg记账-win32-x64-1.2.0.zip`
+
+### 待办（等用户拍板）
+
+1. **把机器上装着的 1.1.0 升级到 1.2.0** —— 用户尚未安装，所以贪吃蛇目前还玩不到。装完要验证程序启动与账单数据正常
+2. **删除旧文件夹空壳** —— 需等 VSCode 释放 `F:\vibecoding_记账app` 之后进行
+
+### 每次开工前必做
+
+- 确认工作目录是 `F:\mwg-accounting`，不是旧备份目录
+- 推送 / 打包前先开代理软件（Clash Verge，端口 7897）；**打包命令必须带代理环境变量**，见上文「开发环境注意事项」
+- 技术决策一律先列方案、等用户拍板，再动手（见第 2 章）
