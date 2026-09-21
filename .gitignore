@@ -90,3 +90,8 @@ typings/
 
 # Electron-Forge
 out/
+
+# 本地账单数据（SQLite 数据库文件）—— 绝不能提交，否则全部账单会公开
+*.db
+*.db-wal
+*.db-shm

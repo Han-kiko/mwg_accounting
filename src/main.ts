@@ -21,7 +21,7 @@ import {
 } from './db';
 import type { AppInfo, ExpenseFilter, ExpenseInput } from './shared/api';
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// Windows 安装/卸载本程序时会带一个特殊参数启动它，检测到就立刻退出（安装程序专用，正常使用不受影响）
 if (started) {
   app.quit();
 }
@@ -153,7 +153,7 @@ ipcMain.handle('expense:list', (_event, filter?: ExpenseFilter) =>
 );
 
 const createWindow = () => {
-  // Create the browser window.
+  // 创建应用主窗口
   const mainWindow = new BrowserWindow({
     title: 'mwg记账',
     width: 1100,
@@ -175,7 +175,8 @@ const createWindow = () => {
     console.log('[main] 子进程消失：', details.type, details.reason, details.exitCode),
   );
 
-  // and load the index.html of the app.
+  // 开发模式：连 Vite 的本地开发服务器（改代码自动刷新页面）；打包后：直接读打进包里的页面文件。
+  // 下面这两个大写变量是 Vite 插件在编译时自动塞进来的，这个文件里找不到它们的定义，不用担心。
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -185,9 +186,7 @@ const createWindow = () => {
   }
 };
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+// Electron 启动完毕后才建窗口——只有这时候窗口和数据库才能安全使用，数据库也在这里初始化
 app.on('ready', () => {
   try {
     console.log('[main] ready 事件触发，开始初始化数据库…');
@@ -200,9 +199,7 @@ app.on('ready', () => {
   }
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// 所有窗口都关掉就退出程序；Mac 习惯不一样——关掉窗口不退出，要按 Cmd+Q 才算真的退出
 app.on('window-all-closed', () => {
   console.log('[main] 所有窗口已关闭，准备退出');
   if (process.platform !== 'darwin') {
@@ -211,8 +208,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+  // Mac 上点任务栏图标时，如果窗口都已经关了，就重新建一个
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }

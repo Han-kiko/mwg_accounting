@@ -81,6 +81,11 @@ function seedCategories(): void {
   seed();
 }
 
+/** 关闭数据库连接（测试收尾时用：Windows 下不关闭会锁住数据库文件，临时目录就删不掉） */
+export function closeDatabase(): void {
+  db.close();
+}
+
 /** 分类总数（用于验证数据库可用） */
 export function countCategories(): number {
   const { c } = db.prepare('SELECT COUNT(*) AS c FROM categories').get() as { c: number };
