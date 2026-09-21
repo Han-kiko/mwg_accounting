@@ -90,11 +90,20 @@
   2. extract-zip 读 electron 大压缩包会卡死：`node_modules/@electron/packager/dist/unzip.js` 已改为调用 PowerShell Expand-Archive（npm install 重装会覆盖此补丁）。
   3. npm 启动脚本与 keepalive 冲突：绕过 npm shim，直接 `node /f/nodejs/node_modules/npm/bin/npm-cli.js run make`。
   4. 长驻 node 进程需 `NODE_OPTIONS="--require=F:/mwg-accounting/scripts/keepalive.js"` 防止假死。
-- **打包命令**（从 F:\mwg-accounting 运行）：
+- **打包命令**（从 F:\mwg-accounting 运行）：**必须先启动代理软件**（Clash Verge 等，端口 7897）。打包过程中有一个环节要访问 GitHub，被墙挡住会报 `connect ETIMEDOUT 20.205.243.166:443`。注意：**Node 默认不走系统代理**，必须显式传代理环境变量（2026-09-21 实测）：
   ```bash
-  cd F:/mwg-accounting && PATH="/c/Windows/System32:/c/Windows/System32/WindowsPowerShell/v1.0:$PATH" NODE_OPTIONS="--require=F:/mwg-accounting/scripts/keepalive.js" env -u ELECTRON_RUN_AS_NODE node F:/mwg-accounting/node_modules/@electron-forge/cli/dist/electron-forge.js make > "F:/mwg-accounting/make.log" 2>&1
+  cd F:/mwg-accounting
+  export PATH="/c/Windows/System32:/c/Windows/System32/WindowsPowerShell/v1.0:$PATH"
+  export NODE_OPTIONS="--require=F:/mwg-accounting/scripts/keepalive.js"
+  export ELECTRON_GET_USE_PROXY=1
+  export GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:7897
+  export GLOBAL_AGENT_HTTP_PROXY=http://127.0.0.1:7897
+  export HTTPS_PROXY=http://127.0.0.1:7897
+  export HTTP_PROXY=http://127.0.0.1:7897
+  env -u ELECTRON_RUN_AS_NODE node F:/mwg-accounting/node_modules/@electron-forge/cli/dist/electron-forge.js make > "F:/mwg-accounting/make.log" 2>&1
   ```
-  产物在 `out\make\`：`mwg记账-1.0.0 Setup.exe`（安装版）+ `mwg记账-win32-x64-1.0.0.zip`（绿色版）。
+  产物在 `out\make\`：`mwg记账-1.2.0 Setup.exe`（安装版，约 158 MB）+ `mwg记账-win32-x64-1.2.0.zip`（绿色版，约 163 MB）。
+- **`.npmrc` 的 `electron_mirror` 已失效**（2026-09-21 确认）：npm 不再识别这种自定义键，每次命令都警告 `Unknown project config "electron_mirror"`，导致镜像不生效、下载只能走 GitHub。当前靠代理解决；将来 npm 升级后若打包下载异常，优先检查这里。
 - **版本管理（git）**：项目已纳入 git 管理，云端备份在 GitHub（`Han-kiko/mwg_accounting`，公开）。每次完成一个功能后由 Claude 负责存档并推送云端，用户无需操作 git。推送需代理软件开启（见上表 2026-09-16 决策）；若推送失败提示网络错误，先检查代理软件是否在运行。
 
 ## 4. 产品功能设计
@@ -145,6 +154,7 @@
 - [x] 2026-09-16 打包 Windows 安装包完成：Setup.exe 安装版 + ZIP 绿色版（`out\make\`），均已实测——安装流程、开始菜单快捷方式启动、数据库读写全部正常（Mac 版按 2026-09-14 决策暂缓）
 - [x] 2026-09-16 纳入 git 版本管理并完成 GitHub 云端备份：本地存档点建立、代码推送云端成功（走本机代理）
 - [x] 2026-09-16 分类管理功能：预置分类锁定（改名/删除被拒），自建分类可新增/改名/删除，删除时账单可搬移到指定分类（数据库自动升级加 is_preset 标记；16 项自动化测试全部通过）
-- [ ] 2026-09-21 贪吃蛇小游戏（**分支 feature/snake-game 开发中**）：左侧菜单「小游戏」入口 + Canvas 经典玩法（越吃越快、最高分本地保存），已开发完成并通过自动化像素级验证（移动/转向/撞墙/重开/得分全通过，顺带修复高分屏画布显示 bug）；待合并主线、重新打包发布
+- [x] 2026-09-21 贪吃蛇小游戏：左侧菜单「小游戏」入口 + Canvas 经典玩法（越吃越快、最高分本地保存），已通过自动化像素级验证（移动/转向/撞墙/重开/得分全通过，顺带修复高分屏画布显示 bug）；**已合并主线并随 1.2.0 打包发布**
+- [x] 2026-09-21 发布 1.2.0：贪吃蛇 + 单元测试与质量工具链合并进 main，打包出 `mwg记账-1.2.0 Setup.exe` 与绿色版 ZIP，并推送 GitHub（提交 `44bebc6`）
 - [x] 2026-09-21 单元测试与质量工具链：Vitest 3 接入（`npm test`，13 项核心数据逻辑测试全部通过）；新增 5 个 skill（`open` / `test` / `comments-check` / `security-audit` / `git-save`）与 2 个 subagent（`tester` / `quality-engineer`）
 - [x] 2026-09-21 安全与注释加固：`.gitignore` 补数据库文件防泄露规则；`main.ts` 遗留的英文样板注释全部改为中文
