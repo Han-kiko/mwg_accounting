@@ -19,8 +19,13 @@ import StatsPage from './pages/StatsPage';
 
 const { Header, Sider, Content } = Layout;
 
+// 左侧菜单里每一个可点的项，对应一个页面标识。
+// 用这种「字符串联合类型」而不是随便写字符串，是为了让 TypeScript 帮忙检查——
+// 打错字或者用了不存在的页面名，编辑器当场就会报错。
 type PageKey = 'home' | 'add' | 'list' | 'stats' | 'categories' | 'game' | 'settings';
 
+// 左侧导航菜单的内容：每一项是「标识 + 图标 + 显示的中文名」。
+// 想加新页面，在这里加一行，再去下面渲染的地方加一个分支即可。
 const MENU_ITEMS: MenuProps['items'] = [
   { key: 'home', icon: <AppstoreOutlined />, label: '首页' },
   { key: 'add', icon: <EditOutlined />, label: '记一笔' },
@@ -31,15 +36,26 @@ const MENU_ITEMS: MenuProps['items'] = [
   { key: 'settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
+// 还没做的页面先放一句「开发中」占位，点进去不会白屏。
+// 做完一个就从这里删掉，再去下面渲染的地方加一个真正的分支。
 const PLACEHOLDER = new Map<PageKey, string>([
   ['settings', '「设置」功能开发中'],
 ]);
 
+/**
+ * 应用的外壳：左边是导航菜单，上面是标题栏，右边是各个页面。
+ * 它自己不处理业务，只负责「点哪个菜单就显示哪个页面」。
+ */
 export default function App() {
+  // 当前正在看哪个页面，默认是首页
   const [page, setPage] = useState<PageKey>('home');
+  // 从主进程取回来的应用信息：版本号、分类数量、账本文件位置
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  // 数据库连不上时把错误信息记在这里，首页会红字提示
   const [dbError, setDbError] = useState<string | null>(null);
 
+  // 应用启动时问一次主进程要信息。window.api 这个接口由 preload 脚本
+  // 从主进程那边「搭桥」过来，界面代码不能直接碰数据库。
   useEffect(() => {
     window.api
       .getAppInfo()
@@ -77,6 +93,8 @@ export default function App() {
             mwg记账
           </Typography.Title>
         </Header>
+        {/* 下面这一长串三元判断就是最简单的「路由」：按当前 page 决定渲染哪个页面组件。
+            页面再多下去可以换成 react-router 之类的专门库，现在这样够用也好懂。 */}
         <Content style={{ padding: 24 }}>
           {page === 'home' ? (
             <Card title="欢迎使用 mwg记账">
