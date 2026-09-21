@@ -76,6 +76,13 @@
 | 2026-09-21 | 自定义 skill `git-save`：`.claude/skills/git-save`，一键存档并推送到 GitHub（**推送前先检查代理**，提交前跑测试与规范检查） | 用户选定：不操作 git，由 Claude 负责存档推送 |
 | 2026-09-21 | 自定义 subagent `tester`（`.claude/agents/tester.md`，执行时调用 `/test` 手册）与 `quality-engineer`（串联 security-audit + comments-check + `npm run lint`，输出一份合并体检报告） | 用户选定：把测试与质量检查的活儿整个交给助手，主对话只留结论 |
 | 2026-09-21 | `.gitignore` 补 `*.db` / `*.db-wal` / `*.db-shm` | 安全审计发现：账本文件一旦被复制进工程目录并提交，全部账单会公开；属预防措施 |
+| 2026-09-21 | **提交闸门**：`pre-commit` 钩子拦截未通过检查的提交，硬性要求「单元测试 + 代码规范」通过 | 用户拍板：把「提交前跑测试」从君子协定变成机器强制。安全/注释检查结论照常汇报但不拦（主观判断不适合当硬闸门） |
+| 2026-09-21 | 闸门判断依据：**标记文件 + 内容树指纹**（`git write-tree`），不是单纯「有没有通过标记」 | 单纯标记会撒谎：跑完检查再改坏代码，旧标记照样放行。绑上指纹后，内容一变标记自动作废 |
+| 2026-09-21 | 标记文件放 `.git/quality-gate.*`（不放工作区） | 放工作区会被 `git add` 算进树指纹，每次重写标记都会改变它所签的内容 → 自指死锁；放 `.git/` 结构上就不可能被提交 |
+| 2026-09-21 | 钩子放**版本化的 `.githooks/`** + `core.hooksPath`，不用 `.git/hooks/` | `.git/hooks/` 不受版本管理，换电脑/重新克隆就没了。放 `.githooks/` 跟代码一起备份；`package.json` 的 `prepare` 脚本在 `npm install` 时自动装好 |
+| 2026-09-21 | 入口做成 **agent** `gitcommit-agent`（并行拉起 tester + quality-engineer 再调 git-save） | 用户选定。已实测子 agent 能再派子 agent（`tools:` 里必须显式写 `Agent`） |
+| 2026-09-21 | 修 `.eslintrc.json` 的 `import/no-unresolved` 假报警，让 lint 能客观退出 0 | 用户选定：闸门要「机器可判定」。不修的话 `npm run lint` 永远退出 1，lint 闸门只能靠模型主观判断 |
+| 2026-09-21 | 闸门**不自己重跑** `npm test`（`RERUN_TESTS=0`），信任标记 | 用户选定：提交更快。钩子不依赖 node，也绕开了本机 keepalive 预加载脚本可能卡死的问题 |
 
 > 后续新增技术细节（如导出备份格式等）按第 2 章协作规则另行征询用户后决定，决策后补录到本表。
 
@@ -105,6 +112,18 @@
   产物在 `out\make\`：`mwg记账-1.2.0 Setup.exe`（安装版，约 158 MB）+ `mwg记账-win32-x64-1.2.0.zip`（绿色版，约 163 MB）。
 - **`.npmrc` 的 `electron_mirror` 已失效**（2026-09-21 确认）：npm 不再识别这种自定义键，每次命令都警告 `Unknown project config "electron_mirror"`，导致镜像不生效、下载只能走 GitHub。当前靠代理解决；将来 npm 升级后若打包下载异常，优先检查这里。
 - **版本管理（git）**：项目已纳入 git 管理，云端备份在 GitHub（`Han-kiko/mwg_accounting`，公开）。每次完成一个功能后由 Claude 负责存档并推送云端，用户无需操作 git。推送需代理软件开启（见上表 2026-09-16 决策）；若推送失败提示网络错误，先检查代理软件是否在运行。
+
+- **提交闸门（2026-09-21 起生效）**：`.githooks/pre-commit` 会拦下没有通过检查的提交。要点：
+  - **怎么用**：正常说「存档」或「检查后存档」即可，Claude 会处理。手动绕过只在极端情况用。
+  - **它靠什么判断**：`.git/quality-gate.test.marker` 和 `.git/quality-gate.lint.marker` 两个标记，由 `tester` / `quality-engineer` 写出。标记里记着当时内容的**树指纹**（`git write-tree`）。提交时重算指纹，对不上就说明检查后内容又改了 → 标记作废。**只判断「有没有标记」是坏的**（改坏代码照样放行），所以必须绑指纹。
+  - **CRLF 陷阱（重要）**：本机 `core.autocrlf=true`。钩子是 shell 脚本，一旦被检出成 CRLF，`sh` 直接语法错误、钩子静默失效。靠 `.gitattributes` 里的 `/.githooks/* text eol=lf` 挡住。若 `git commit` 报 `sh` 语法错误且没有闸门提示，就是这个原因。恢复：`rm .githooks/pre-commit && git checkout -- .githooks/pre-commit`。
+  - **BOM 陷阱**：UTF-8 BOM 会让 `sh` 把首字节当命令名 → `not found`。VS Code 默认不加 BOM，别用会加的编辑器改这个文件。
+  - **`safe.directory` 必须保留**：全局配置里的 `safe.directory=*` 不能删。没有它 git 会认为仓库属主异常，从而**静默跳过全部钩子**——闸门会无声消失，没有任何报错。
+  - **人工逃生门**：`SKIP_QUALITY_GATE="原因" git commit ...`，必须写非空原因，会记入 `.git/quality-gate.skip.log`。**Claude 绝不允许自己设这个变量**，也不允许给 `git commit` 加 `--no-verify`——那是人（用户）的权力。
+  - **豁免**：纯文档/配置提交（`*.md`、`.gitignore`、`.gitattributes`、`LICENSE`、`images/`、`.claude/`）自动放行。`package.json` / `tsconfig.json` / `vitest.config.ts` / `.eslintrc.json` 故意**不**豁免——它们会改变测试和 lint 的行为。
+  - **合并不拦**：本机 `pull.rebase=false`，`git pull` 分叉会生成合并提交；git 在缺 `pre-merge-commit` 时会回落到 `pre-commit`，不加豁免的话 `git pull` 会被无理由卡死。
+  - **换电脑/重新克隆**：`.git/` 里的标记会丢（这是对的，新克隆没跑过检查）。钩子脚本本身在 `.githooks/` 里跟代码一起备份；跑一次 `npm install`（`prepare` 脚本）就会自动设好 `core.hooksPath`。若没跑，手动一条命令：`git config --local core.hooksPath .githooks`。
+  - **验证闸门本身**：`git hook run pre-commit` 可以不真的提交而单独跑一次钩子，用来确认它还活着。
 
 ## 4. 产品功能设计
 
@@ -158,6 +177,7 @@
 - [x] 2026-09-21 发布 1.2.0：贪吃蛇 + 单元测试与质量工具链合并进 main，打包出 `mwg记账-1.2.0 Setup.exe` 与绿色版 ZIP，并推送 GitHub（提交 `44bebc6`）
 - [x] 2026-09-21 单元测试与质量工具链：Vitest 3 接入（`npm test`，13 项核心数据逻辑测试全部通过）；新增 5 个 skill（`open` / `test` / `comments-check` / `security-audit` / `git-save`）与 2 个 subagent（`tester` / `quality-engineer`）
 - [x] 2026-09-21 安全与注释加固：`.gitignore` 补数据库文件防泄露规则；`main.ts` 遗留的英文样板注释全部改为中文
+- [x] 2026-09-21 提交闸门：`.githooks/pre-commit` 钩子 + 树指纹标记机制；`tester` / `quality-engineer` 改造为写出通过标记；新增 `gitcommit-agent`（编排）与 `git-save` 自愈；`.eslintrc.json` 修掉 lint 假报警（现在退出 0）；钩子五种状态验收全通过。**注**：`gitcommit-agent` 需重启 Claude Code 会话后才注册，其「并行拉起子 agent」能力待重启后实测
 
 ## 8. 接续说明（新的 Claude 对话请先读这一节）
 

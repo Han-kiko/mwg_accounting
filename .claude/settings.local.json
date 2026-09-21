@@ -9,7 +9,14 @@
       "Bash(env -u ELECTRON_RUN_AS_NODE ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm run make)",
       "Bash(env -u ELECTRON_RUN_AS_NODE ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ DEBUG=electron-forge:make,electron-forge:require,electron-forge:plugin npx electron-forge make)",
       "Bash(env -u ELECTRON_RUN_AS_NODE ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron-packager . --platform=win32 --arch=x64 --icon=./images/icon --out=out-test --overwrite)",
-      "Bash(echo \"PACKAGER EXIT: $?\")"
+      "Bash(echo \"PACKAGER EXIT: $?\")",
+      "Bash(git write-tree)",
+      "Bash(git rev-parse *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git branch --show-current)",
+      "Bash(npm test)",
+      "Bash(npm run lint)"
     ]
   }
 }

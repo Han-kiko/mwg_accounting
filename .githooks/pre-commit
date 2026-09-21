@@ -1,0 +1,173 @@
+#!/bin/sh
+# ===========================================================================
+#  mwg-accounting —— 提交闸门（pre-commit hook）
+# ---------------------------------------------------------------------------
+#  作用：拦住「没通过检查」的提交。
+#
+#  判断依据是下面两个标记文件，由 tester / quality-engineer 两个 agent
+#  在检查真正通过之后写出：
+#      <gitdir>/quality-gate.test.marker   单元测试
+#      <gitdir>/quality-gate.lint.marker   代码规范
+#
+#  标记里记录了当时那批内容的「树指纹」（git write-tree 算出来的哈希）。
+#  提交时这里重新算一次：对不上，就说明检查跑完之后内容又被改过，标记作废。
+#  只靠「有没有这个文件」判断是不行的 —— 那样改坏了代码照样能提交。
+#
+#  放行 = 退出码 0；其它任何退出码都会让 git 中止这次提交。
+#
+#  只用 git 和 sh，不依赖 node、jq —— 从图形界面启动 git 时 PATH 可能不全，
+#  连 node 都找不到。
+#
+#  本文件必须保持 UTF-8 无 BOM、LF 换行（见 .gitattributes）。
+#  一旦变成 CRLF，sh 会报语法错误，钩子会静默失效、闸门形同虚设。
+#
+#  人工逃生门（会记入 <gitdir>/quality-gate.skip.log）：
+#      SKIP_QUALITY_GATE="只是改个错字" git commit -m "..."
+#  必须写明原因，不能写数字。Claude 绝不允许自己设这个变量，
+#  也绝不允许自己给 git commit 加 --no-verify。
+# ===========================================================================
+
+# ---- 可调开关 --------------------------------------------------------------
+# RERUN_TESTS=1 表示钩子不信任标记，自己再跑一遍 npm test。
+# 需要 PATH 上有 npm，而且本机的 keepalive 预加载脚本有可能把它挂死，
+# 所以默认关着。
+RERUN_TESTS=0
+# CHECK_HEAD=1 表示还要求标记里的 head 与当前 HEAD 一致。
+# 默认关着：不然只改 commit 说明的 --amend 会被无理由拦下。
+CHECK_HEAD=0
+# 必须同时具备的检查项
+REQUIRED_CHECKS="test lint"
+
+# ---- 定位仓库 --------------------------------------------------------------
+cd "$(git rev-parse --show-toplevel)" 2>/dev/null || {
+  echo "[quality-gate] not inside a work tree" >&2
+  exit 1
+}
+GITDIR=$(git rev-parse --absolute-git-dir) || exit 1
+
+# 暂存内容的树指纹。算不出来多半是合并冲突还没解决。
+TREE=$(git write-tree 2>/dev/null) || {
+  echo "[质量闸门] 读不出暂存区快照，多半是合并冲突还没解决。" >&2
+  echo "[quality-gate] git write-tree failed (unresolved conflict?)" >&2
+  exit 1
+}
+HEAD_SHA=$(git rev-parse -q --verify HEAD 2>/dev/null) || HEAD_SHA=none
+
+# 从标记文件里取一个 key 的值
+marker_get() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -n 1 | tr -d '\r\n'; }
+
+reject() {
+  printf '\n' >&2
+  echo "============================================================" >&2
+  echo "[质量闸门] 这次提交被拦下了。" >&2
+  echo "原因：$1" >&2
+  echo "" >&2
+  echo "下一步：在 Claude Code 里说「检查后存档」，" >&2
+  echo "        让它重新跑一遍检查和测试，通过后会自动提交。" >&2
+  echo "" >&2
+  echo "如果这次改动确实不需要跑检查（比如只改了个错字），" >&2
+  echo "可以用一次性的例外：SKIP_QUALITY_GATE=\"原因\" git commit ..." >&2
+  echo "------------------------------------------------------------" >&2
+  echo "[quality-gate] tree=$TREE head=$HEAD_SHA" >&2
+  echo "============================================================" >&2
+  exit 1
+}
+
+# ---- 1. 合并不拦 -----------------------------------------------------------
+# 本机 pull.rebase=false，git pull 遇到分叉会生成合并提交。而 git 在找不到
+# pre-merge-commit 时会回落到 pre-commit，不加这条的话 git pull 会被无理由卡死。
+# 合并的内容来自两个各自已经过闸门的分支，复核意义不大。
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  echo "[quality-gate] merge in progress -- gate skipped." >&2
+  exit 0
+fi
+
+# ---- 2. 人工逃生门（留痕） -------------------------------------------------
+if [ -n "${SKIP_QUALITY_GATE:-}" ]; then
+  printf '%s tree=%s reason=%s\n' \
+    "$(date '+%Y-%m-%d %H:%M:%S')" "$TREE" "$SKIP_QUALITY_GATE" \
+    >> "$GITDIR/quality-gate.skip.log" 2>/dev/null
+  echo "[quality-gate] SKIPPED: $SKIP_QUALITY_GATE (logged)" >&2
+  exit 0
+fi
+
+# ---- 3. 这次到底暂存了什么 -------------------------------------------------
+if [ "$HEAD_SHA" = none ]; then
+  CHANGED=$(git ls-files --cached)
+else
+  CHANGED=$(git diff --cached --name-only HEAD 2>/dev/null)
+fi
+if [ -z "$CHANGED" ]; then
+  echo "[quality-gate] nothing staged -- gate skipped." >&2
+  exit 0
+fi
+
+# ---- 4. 纯文档/配置不跑检查 -------------------------------------------------
+# 判断依据是「暂存了哪些文件」，而不是工作区，所以塞不进 src 的改动。
+# 注意：package.json / tsconfig.json / vitest.config.ts / .eslintrc.json /
+# forge.config.ts 故意不在豁免名单里 —— 它们会改变测试和 lint 的行为。
+UNGATED=$(printf '%s\n' "$CHANGED" | grep -vE \
+  '^(.*\.md|\.gitignore|\.gitattributes|LICENSE|images/|docs/|\.claude/|\.vscode/)' \
+  | head -n 1)
+if [ -z "$UNGATED" ]; then
+  echo "[quality-gate] docs/config only -- gate skipped." >&2
+  exit 0
+fi
+
+# ---- 5. 工作区与暂存区必须一致（最关键的一条） -----------------------------
+# 检查读的是工作区文件，标记哈希的是暂存区内容。两者不一致时会出现这种假放行：
+# agent 改了 src/db.ts 让测试通过，却忘了 git add —— 提交进去的是旧的有 bug 的
+# 版本，而标记是拿新版跑出来的。树指纹看不见这种情况，只有这条能堵住。
+if ! git diff --quiet; then
+  reject "工作区里还有没暂存进去的改动。检查跑的是工作区、提交的是暂存区，
+两者对不上时闸门无法作数。请先执行 git add -A 再提交。"
+fi
+
+# 新文件没暂存 = 提交会漏掉它。不是安全漏洞，但会让你以为存了其实没存。
+UNTRACKED=$(git ls-files --others --exclude-standard | head -n 1)
+if [ -n "$UNTRACKED" ]; then
+  reject "有新文件还没加入暂存区（例如 $UNTRACKED），这样提交会漏掉它。请先执行 git add -A。"
+fi
+
+# ---- 6. 逐个校验标记 -------------------------------------------------------
+for CHECK in $REQUIRED_CHECKS; do
+  M="$GITDIR/quality-gate.$CHECK.marker"
+  [ -f "$M" ] || reject "缺少「$CHECK」检查的通过标记，说明这批改动还没跑过检查。"
+
+  M_NAME=$(marker_get "$M" check)
+  M_TREE=$(marker_get "$M" tree)
+  M_HEAD=$(marker_get "$M" head)
+  M_EXIT=$(marker_get "$M" exit)
+  M_AT=$(marker_get "$M" at)
+
+  [ "$M_NAME" = "$CHECK" ] || reject "「$CHECK」标记文件内容对不上（check=$M_NAME）。"
+  [ "$M_EXIT" = "0" ]      || reject "「$CHECK」检查没有通过（exit=$M_EXIT）。"
+  [ "$M_TREE" = "$TREE" ]  || reject "检查跑完之后，准备提交的内容又被改动过了，之前那次检查结果不再算数。"
+
+  if [ "$CHECK_HEAD" = "1" ] && [ "$M_HEAD" != "$HEAD_SHA" ]; then
+    reject "这份「$CHECK」标记不是针对当前提交历史做的（head 过期）。"
+  fi
+  [ "$M_HEAD" = "$HEAD_SHA" ] || \
+    echo "[quality-gate] note: $CHECK marker head=$M_HEAD != HEAD=$HEAD_SHA" >&2
+
+  echo "[quality-gate] $CHECK ok (at $M_AT)" >&2
+done
+
+# ---- 7. 可选：钩子自己重跑一遍测试 -----------------------------------------
+if [ "$RERUN_TESTS" = "1" ]; then
+  command -v npm >/dev/null 2>&1 || \
+    reject "闸门要自己重跑测试，但钩子环境里找不到 npm（PATH 问题）。"
+  echo "[quality-gate] re-running npm test ..." >&2
+  if ! npm test >"$GITDIR/quality-gate.test.log" 2>&1; then
+    reject "闸门重跑 npm test 失败，详情见 $GITDIR/quality-gate.test.log。"
+  fi
+fi
+
+# ---- 8. 顺带把安全/注释检查的结论显示出来（不拦） ---------------------------
+AUDIT="$GITDIR/quality-gate.audit.txt"
+if [ -f "$AUDIT" ]; then
+  V=$(grep -m1 '^verdict=' "$AUDIT" 2>/dev/null | tr -d '\r')
+  [ -n "$V" ] && echo "[quality-gate] audit: $V" >&2
+fi
+
+exit 0

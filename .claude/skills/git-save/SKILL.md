@@ -40,13 +40,37 @@ them run commands.
 4. **Note the branch.** `git branch --show-current`. Push that branch.
    Never force-push, never rewrite history, never delete a remote branch.
 
-5. **Run the checks before committing.**
-   - `npm test`
-   - `npm run lint`
+5. **Satisfy the pre-commit quality gate.**
 
-   Report both results. If a test fails, stop and report it — do not commit
-   a broken state silently. Lint findings that are known baseline (see the
-   quality-engineer agent) are fine to note and continue.
+   This repo installs a `pre-commit` hook (`.githooks/pre-commit`) that
+   **aborts the commit** unless both marker files exist, both say `exit=0`,
+   and both carry a `tree=` fingerprint equal to the current staged tree:
+
+   - `.git/quality-gate.test.marker` (unit tests, written by `tester`)
+   - `.git/quality-gate.lint.marker` (code style, written by `quality-engineer`)
+
+   Check before committing:
+
+   ```sh
+   git add -A
+   git write-tree                                  # the current fingerprint
+   grep -h '^tree=' .git/quality-gate.*.marker     # must both match it
+   ```
+
+   - **Markers valid** → commit straight away. Do not re-run the checks; that
+     is wasted work and the hook does not need it.
+   - **Missing or stale** → run the gate first: follow the freeze protocol in
+     `.claude/agents/gitcommit-agent.md`. In practice that means spawning the
+     `tester` and `quality-engineer` agents in parallel, letting them write
+     the markers, then committing.
+
+   If a check genuinely fails, stop and report it in Chinese — never commit a
+   broken state. (The hook would refuse it anyway.)
+
+   **Never pass `--no-verify` to `git commit`, and never set the
+   `SKIP_QUALITY_GATE` variable.** Both bypasses belong to the human, not to
+   you. When the gate blocks you, the correct move is to report it in Chinese —
+   not to route around it.
 
 6. **Commit.** Stage the changes and write an English commit message that
    summarises what actually changed, ending with:

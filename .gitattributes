@@ -1,0 +1,8 @@
+# 保证 checkout 时换行符不被转换的文件
+#
+# 背景：本机 git 设了 core.autocrlf=true，默认会把文本文件检出成 CRLF。
+# 但 .githooks/ 下是 shell 脚本，一旦带上 \r，sh 会把 \r 当成命令的一部分，
+# 直接报语法错误 —— 钩子会静默失效，闸门形同虚设。
+# 所以这里强制这些文件按 LF 存取。
+
+/.githooks/* text eol=lf
