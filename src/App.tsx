@@ -3,6 +3,7 @@ import {
   AppstoreOutlined,
   BarChartOutlined,
   EditOutlined,
+  PlayCircleOutlined,
   SettingOutlined,
   TagsOutlined,
   UnorderedListOutlined,
@@ -13,11 +14,12 @@ import type { AppInfo } from './shared/api';
 import AddExpensePage from './pages/AddExpensePage';
 import CategoryManagePage from './pages/CategoryManagePage';
 import ExpenseListPage from './pages/ExpenseListPage';
+import SnakeGamePage from './pages/SnakeGamePage';
 import StatsPage from './pages/StatsPage';
 
 const { Header, Sider, Content } = Layout;
 
-type PageKey = 'home' | 'add' | 'list' | 'stats' | 'categories' | 'settings';
+type PageKey = 'home' | 'add' | 'list' | 'stats' | 'categories' | 'game' | 'settings';
 
 const MENU_ITEMS: MenuProps['items'] = [
   { key: 'home', icon: <AppstoreOutlined />, label: '首页' },
@@ -25,6 +27,7 @@ const MENU_ITEMS: MenuProps['items'] = [
   { key: 'list', icon: <UnorderedListOutlined />, label: '账单' },
   { key: 'stats', icon: <BarChartOutlined />, label: '月度汇总' },
   { key: 'categories', icon: <TagsOutlined />, label: '分类管理' },
+  { key: 'game', icon: <PlayCircleOutlined />, label: '小游戏' },
   { key: 'settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
@@ -108,6 +111,8 @@ export default function App() {
             <StatsPage />
           ) : page === 'categories' ? (
             <CategoryManagePage />
+          ) : page === 'game' ? (
+            <SnakeGamePage />
           ) : (
             <Card>
               <Typography.Title level={5} style={{ marginTop: 0 }}>
